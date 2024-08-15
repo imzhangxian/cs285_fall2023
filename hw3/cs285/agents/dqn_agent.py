@@ -48,7 +48,10 @@ class DQNAgent(nn.Module):
         observation = ptu.from_numpy(np.asarray(observation))[None]
 
         # TODO(student): get the action from the critic using an epsilon-greedy strategy
-        action = ...
+        action = torch.argmax(self.critic(observation),dim=1)
+        p = np.random.random() 
+        if p < epsilon: 
+            action = torch.tensor(np.random.choice(self.num_actions))
 
         return ptu.to_numpy(action).squeeze(0).item()
 
@@ -66,21 +69,24 @@ class DQNAgent(nn.Module):
         # Compute target values
         with torch.no_grad():
             # TODO(student): compute target values
-            next_qa_values = ...
+            # batch_size x n_obs * n_obs x n_actions = batch_size x n_actions
+            # output explain: the qualities of all actions for a batch
+            next_qa_values = self.target_critic(next_obs)
 
             if self.use_double_q:
                 raise NotImplementedError
             else:
-                next_action = ...
+                next_action = torch.argmax(next_qa_values, dim=1) # batch_size x 1
             
-            next_q_values = ...
-            target_values = ...
+            next_q_values = torch.gather(next_qa_values, 1, next_action.unsqueeze(1).permute(0,1))
+            target_values = reward + self.discount * next_q_values
 
         # TODO(student): train the critic with the target values
-        qa_values = ...
-        q_values = ... # Compute from the data actions; see torch.gather
-        loss = ...
-
+        # !! need to keep the computation graph !!
+        qa_values = self.critic(obs)
+        q_values = torch.gather(qa_values, 1, action.unsqueeze(1).permute(0,1)) # Compute from the data actions; see torch.gather
+        mse = nn.MSELoss()
+        loss = mse(q_values, target_values)
 
         self.critic_optimizer.zero_grad()
         loss.backward()
@@ -114,5 +120,8 @@ class DQNAgent(nn.Module):
         Update the DQN agent, including both the critic and target.
         """
         # TODO(student): update the critic, and the target if needed
+        critic_stats = self.update_critic(obs, action, reward, next_obs, done)
+        if step % self.target_update_period == 0:
+            self.update_target_critic()
 
         return critic_stats

@@ -30,7 +30,7 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
     ptu.init_gpu(use_gpu=not args.no_gpu, gpu_id=args.which_gpu)
 
     # make the gym environment
-    env = config["make_env"]()
+    env = gym.Env(config["make_env"]()) # config["make_env"]()
     eval_env = config["make_env"]()
     render_env = config["make_env"](render=True)
     exploration_schedule = config["exploration_schedule"]
@@ -91,9 +91,10 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
         epsilon = exploration_schedule.value(step)
         
         # TODO(student): Compute action
-        action = ...
+        action = agent.get_action(observation)
 
         # TODO(student): Step the environment
+        next_observation, reward, done, info = env.step(action)
 
         next_observation = np.asarray(next_observation)
         truncated = info.get("TimeLimit.truncated", False)
@@ -102,10 +103,10 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
         if isinstance(replay_buffer, MemoryEfficientReplayBuffer):
             # We're using the memory-efficient replay buffer,
             # so we only insert next_observation (not observation)
-            ...
+            replay_buffer.insert(action=action, reward=reward, next_observation=next_observation, done=done)
         else:
             # We're using the regular replay buffer
-            ...
+            replay_buffer.insert(observation=observation, action=action, reward=reward, next_observation=next_observation, done=done)
 
         # Handle episode termination
         if done:
@@ -119,13 +120,18 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
         # Main DQN training loop
         if step >= config["learning_starts"]:
             # TODO(student): Sample config["batch_size"] samples from the replay buffer
-            batch = ...
+            batch = replay_buffer.sample(config["batch_size"])
 
             # Convert to PyTorch tensors
             batch = ptu.from_numpy(batch)
 
             # TODO(student): Train the agent. `batch` is a dictionary of numpy arrays,
-            update_info = ...
+            update_info = agent.update(batch["observations"], 
+                                       batch["actions"], 
+                                       batch["rewards"], 
+                                       batch["next_observations"], 
+                                       batch["dones"], 
+                                       step)
 
             # Logging code
             update_info["epsilon"] = epsilon
