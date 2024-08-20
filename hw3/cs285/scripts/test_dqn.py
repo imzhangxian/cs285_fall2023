@@ -31,14 +31,14 @@ def main():
         **config["agent_kwargs"],
     )
     replay_buffer = ReplayBuffer()
-    observation, info = env.reset()
+    observation = env.reset()
 
     for step in tqdm.trange(config["total_steps"], dynamic_ncols=True):
         epsilon = 0.1
         
         action = agent.get_action(observation, epsilon)
 
-        next_observation, reward, _, done, info = env.step(action)
+        next_observation, reward, done, info = env.step(action)
 
         next_observation = np.asarray(next_observation)
         truncated = info.get("TimeLimit.truncated", False)
@@ -50,7 +50,7 @@ def main():
 
         # Handle episode termination
         if done:
-            observation, info = env.reset()
+            observation = env.reset()
         else:
             observation = next_observation
 

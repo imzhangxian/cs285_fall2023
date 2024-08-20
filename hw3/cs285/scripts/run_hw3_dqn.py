@@ -30,7 +30,8 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
     ptu.init_gpu(use_gpu=not args.no_gpu, gpu_id=args.which_gpu)
 
     # make the gym environment
-    env = gym.Env(config["make_env"]()) # config["make_env"]()
+    # env = gym.Env(config["make_env"]()) # 
+    env = config["make_env"]()
     eval_env = config["make_env"]()
     render_env = config["make_env"](render=True)
     exploration_schedule = config["exploration_schedule"]
