@@ -5,8 +5,6 @@ import numpy as np
 import torch
 import tqdm
 
-import sys
-sys.path.append('/Users/zhangxian/Workspace/berkely-rl/homework_fall2023/hw3')
 from cs285.infrastructure import pytorch_util as ptu
 from cs285.agents.dqn_agent import DQNAgent
 
