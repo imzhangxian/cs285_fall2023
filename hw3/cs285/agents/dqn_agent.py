@@ -71,17 +71,17 @@ class DQNAgent(nn.Module):
             # TODO(student): compute target values
             # batch_size x n_obs * n_obs x n_actions = batch_size x n_actions
             # output explain: the qualities of all actions for a batch
+            next_qa_values = self.target_critic(next_obs)
 
             if self.use_double_q:
-                next_qa_values = self.critic(next_obs)
-                next_action = next_qa_values.argmax(dim=1)
+                next_qa_values_for_action_selection = self.critic(next_obs)
+                next_action = next_qa_values_for_action_selection.argmax(dim=1)
                 # raise NotImplementedError
             else:
-                next_qa_values = self.target_critic(next_obs)
                 next_action = next_qa_values.argmax(dim=1) # batch_size x 1
             
             next_q_values = next_qa_values.gather(-1, next_action.unsqueeze(1))
-            target_values = reward + self.discount * next_q_values
+            target_values = reward + self.discount * next_q_values * ~done
 
         # TODO(student): train the critic with the target values
         # !! need to keep the computation graph !!
