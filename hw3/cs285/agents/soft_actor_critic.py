@@ -211,7 +211,7 @@ class SoftActorCritic(nn.Module):
                 next_qs += next_action_entropy
 
             # Compute the target Q-value
-            target_values: torch.Tensor = reward + (~done) * torch.softmax(next_qs, -1)
+            target_values: torch.Tensor = reward + (~done) * next_qs * self.discount
             assert target_values.shape == (
                 self.num_critic_networks,
                 batch_size
@@ -242,6 +242,9 @@ class SoftActorCritic(nn.Module):
 
         # TODO(student): Compute the entropy of the action distribution.
         # Note: Think about whether to use .rsample() or .sample() here...
+        # entropy = - action_distribution.log_prob(action_distribution.sample()).mean()
+        # if self.actor_gradient_type == "reparametrize":
+        #    entropy = - action_distribution.log_prob(action_distribution.rsample()).mean()
         return - action_distribution.log_prob(action_distribution.rsample()).mean()
 
     def actor_loss_reinforce(self, obs: torch.Tensor):
@@ -274,7 +277,8 @@ class SoftActorCritic(nn.Module):
         # Do REINFORCE: calculate log-probs and use the Q-values
         # TODO(student)
         log_probs = action_distribution.log_prob(action)
-        loss = torch.mean(log_probs * advantage)
+
+        loss = torch.mean(- log_probs * advantage)
 
         return loss, torch.mean(self.entropy(action_distribution))
 
@@ -286,13 +290,13 @@ class SoftActorCritic(nn.Module):
 
         # TODO(student): Sample actions
         # Note: Think about whether to use .rsample() or .sample() here...
-        action = action_distribution.rsample(torch.Size([batch_size]))
+        action = action_distribution.rsample()
 
         # TODO(student): Compute Q-values for the sampled state-action pair
         q_values = self.critic(obs=obs, action=action)
 
         # TODO(student): Compute the actor loss
-        loss = action_distribution.log_prob(action) - q_values
+        loss = torch.mean(action_distribution.log_prob(action) - q_values)
 
         return loss, torch.mean(self.entropy(action_distribution))
 
@@ -349,16 +353,19 @@ class SoftActorCritic(nn.Module):
             )
 
         # TODO(student): Update the actor
-        actor_info = self.update_actor(observations)
+        actor_info =  self.update_actor(observations)
 
         # TODO(student): Perform either hard or soft target updates.
         # Relevant variables:
         #  - step
         #  - self.target_update_period (None when using soft updates)
         #  - self.soft_target_update_rate (None when using hard updates)
-        if step % self.target_update_period:
-            # self.soft_update_target_critic(self.soft_target_update_rate)
-            self.update_target_critic()
+        if self.soft_target_update_rate is None:
+            if step % self.target_update_period:
+                # self.soft_update_target_critic(self.soft_target_update_rate)
+                self.update_target_critic()
+        else:
+            self.soft_update_target_critic(self.soft_target_update_rate)
 
         # Average the critic info over all of the steps
         critic_info = {
