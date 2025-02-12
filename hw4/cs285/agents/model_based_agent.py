@@ -89,7 +89,13 @@ class ModelBasedAgent(nn.Module):
         # directly
         # HINT 3: make sure to avoid any risk of dividing by zero when
         # normalizing vectors by adding a small number to the denominator!
-        loss = ...
+        delta_s = (next_obs - obs)
+        normalized_delta_s = (delta_s - self.obs_delta_mean) / (self.obs_delta_std + 1e-8)
+        # normalized_acs = (acs - self.obs_acs_mean) / (self.obs_acs_std + 1e-8)
+        # print(obs.shape, acs.shape)
+        predicted_delta_s = self.dynamics_models[i](torch.concat((obs, acs), dim=1))
+
+        loss = self.loss_fn(normalized_delta_s, predicted_delta_s)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -111,10 +117,10 @@ class ModelBasedAgent(nn.Module):
         acs = ptu.from_numpy(acs)
         next_obs = ptu.from_numpy(next_obs)
         # TODO(student): update the statistics
-        self.obs_acs_mean = ...
-        self.obs_acs_std = ...
-        self.obs_delta_mean = ...
-        self.obs_delta_std = ...
+        self.obs_acs_mean = acs.mean()
+        self.obs_acs_std = acs.std()
+        self.obs_delta_mean = (next_obs - obs).mean()
+        self.obs_delta_std = (next_obs - obs).std()
 
     @torch.no_grad()
     def get_dynamics_predictions(
@@ -135,6 +141,9 @@ class ModelBasedAgent(nn.Module):
         # HINT: make sure to *unnormalize* the NN outputs (observation deltas)
         # Same hints as `update` above, avoid nasty divide-by-zero errors when
         # normalizing inputs!
+        delta_s = self.dynamics_models[i](torch.concat((obs, acs), dim=1))
+        unnormalized_delta_s = delta_s * (self.obs_delta_std + 1e-8) + self.obs_delta_mean
+        pred_next_obs = obs + unnormalized_delta_s
         return ptu.to_numpy(pred_next_obs)
 
     def evaluate_action_sequences(self, obs: np.ndarray, action_sequences: np.ndarray):
@@ -160,7 +169,7 @@ class ModelBasedAgent(nn.Module):
         obs = np.tile(obs, (self.ensemble_size, self.mpc_num_action_sequences, 1))
 
         # TODO(student): for each batch of actions in in the horizon...
-        for acs in ...:
+        for acs in np.moveaxis(action_sequences, 1, 0):
             assert acs.shape == (self.mpc_num_action_sequences, self.ac_dim)
             assert obs.shape == (
                 self.ensemble_size,
@@ -170,7 +179,7 @@ class ModelBasedAgent(nn.Module):
 
             # TODO(student): predict the next_obs for each rollout
             # HINT: use self.get_dynamics_predictions
-            next_obs = ...
+            next_obs = np.stack([self.get_dynamics_predictions(i, obs[i], acs) for i in range(self.ensemble_size)])
             assert next_obs.shape == (
                 self.ensemble_size,
                 self.mpc_num_action_sequences,
@@ -183,7 +192,7 @@ class ModelBasedAgent(nn.Module):
             # respectively, and returns a tuple of `(rewards, dones)`. You can 
             # ignore `dones`. You might want to do some reshaping to make
             # `next_obs` and `acs` 2-dimensional.
-            rewards = ...
+            rewards = np.stack([self.env.get_reward(next_ob, acs)[0] for next_ob in next_obs])
             assert rewards.shape == (self.ensemble_size, self.mpc_num_action_sequences)
 
             sum_of_rewards += rewards
@@ -219,5 +228,6 @@ class ModelBasedAgent(nn.Module):
                 # TODO(student): implement the CEM algorithm
                 # HINT: you need a special case for i == 0 to initialize
                 # the elite mean and std
+                ...
         else:
             raise ValueError(f"Invalid MPC strategy '{self.mpc_strategy}'")
